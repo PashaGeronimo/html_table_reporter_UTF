@@ -327,7 +327,7 @@ module.exports = function(runner, options) {
                     for (var i=0; i<list.length; i++) {
                         temp += '\n' + textIndent(depth + 1) + list[i];
                     }
-                    output += colors.gray(((temp != '') ?'\n'+textIndent(depth + 1)+'|Test Logs|\n' + temp : '') + '\n' + textIndent(depth + 1) + '|Error Message|\n' + test.err);
+                    output += colors.gray(((temp != '') ?'\n'+textIndent(depth + 1)+'|Test Logs|\n' + temp : '') + '\n' + textIndent(depth + 1) + test.err); // + '|Error Message|\n'
                 }
                 console.log(output);
                 let out = test.err.toString().replace('AssertionError:', '');
