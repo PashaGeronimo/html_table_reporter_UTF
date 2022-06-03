@@ -188,7 +188,7 @@ module.exports = function(runner, options) {
                     addIndentation(depth + 2) +
                     '<td class="failDetail">' +
                     '<pre style="font-family: \'Courier New\', Courier, monospace;">' +
-                    '<code>' + ((test.log!=undefined) ? '|Test Logs|\n' + test.log + '\n' : '') + '|Error Message|\n' + out  + '</code>' +
+                    '<code>' + ((test.log!=undefined) ? '|Test Logs|\n' + test.log + '\n' : '')  + out  + '</code>' + //+ '|Error Message|\n'
                     '</pre>' +
                     '</td>' +
                     '</table>';
@@ -327,7 +327,7 @@ module.exports = function(runner, options) {
                     for (var i=0; i<list.length; i++) {
                         temp += '\n' + textIndent(depth + 1) + list[i];
                     }
-                    output += colors.gray(((temp != '') ?'\n'+textIndent(depth + 1)+'|Test Logs|\n' + temp : '') + '\n' + textIndent(depth + 1) + test.err); // + '|Error Message|\n'
+                    output += colors.gray(((temp != '') ?'\n'+textIndent(depth + 1)+'|Test Logs|\n' + temp : '') + '\n' + textIndent(depth + 1) + '|Error Message|\n' + test.err);
                 }
                 console.log(output);
                 let out = test.err.toString().replace('AssertionError:', '');
