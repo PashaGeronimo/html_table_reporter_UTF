@@ -106,9 +106,6 @@ module.exports = function(runner, options) {
             }
 
             console.log('\n');
-            console.log(passPercent);
-            console.log(failPercent);
-
             await sendToBotEndedTest(`\nRun time: ${getTime(status.duration)} \n\n✅Pass persent: ${passPercent} \n\n❌Fail persent: ${failPercent} \n\n💤️Pending persent: ${pendingPercent}`, options.botApiKey, options.botChatId);
 
             if (filePath) {
