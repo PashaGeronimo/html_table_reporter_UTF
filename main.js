@@ -176,12 +176,19 @@ module.exports = function(runner, options) {
                     '</tr>' +
                     '</table>';
 
+
+                let out = test.err.toString().replace('AssertionError:', '');
+                let positions = out.indexOf(': expected');
+                if (positions >= 0) {
+                    out = out.substr(0, out.indexOf(': expected'));
+                }
+
                 tests += '<table cellspacing="0" cellpadding="0">' +
                     '<tr class="' + id + 'err' + status.fail + ' failed">' +
                     addIndentation(depth + 2) +
                     '<td class="failDetail">' +
                     '<pre style="font-family: \'Courier New\', Courier, monospace;">' +
-                    '<code>' + ((test.log!=undefined) ? '|Test Logs|\n' + test.log + '\n' : '') + '|Error Message|\n' + test.err  + '</code>' +
+                    '<code>' + ((test.log!=undefined) ? '|Test Logs|\n' + test.log + '\n' : '') + '|Error Message|\n' + out  + '</code>' +
                     '</pre>' +
                     '</td>' +
                     '</table>';
@@ -323,11 +330,14 @@ module.exports = function(runner, options) {
                     output += colors.gray(((temp != '') ?'\n'+textIndent(depth + 1)+'|Test Logs|\n' + temp : '') + '\n' + textIndent(depth + 1) + '|Error Message|\n' + test.err);
                 }
                 console.log(output);
-                console.log(colors.red(test.err));
+                let out = test.err.toString().replace('AssertionError:', '');
+                let positions = out.indexOf(': expected');
+                if (positions >= 0) {
+                    out = out.substr(0, out.indexOf(': expected'));
+                }
+                console.log(colors.hex('#ff1f44')(out.replace(/(<([^>]+)>)/ig,'')));
                 sendToBotError(test.title, test.err, options.botApiKey, options.botChatId);
             }
-
-
         }
     });
 }
