@@ -1,6 +1,7 @@
 var path = require('path');
 var fs = require('fs');
 var colors = require('chalk');
+const axios = require('axios');
 
 var root = {};
 
@@ -36,6 +37,7 @@ module.exports = function(runner, options) {
     config.path = options.savePath || config.path;
     config.filename = options.filename || config.filename;
     config.mode = options.mode || config.mode;
+    let passPercent, failPercent, pendingPercent;
 
     for (var i=0; (i+1)<process.argv.length; i++) {
         if (process.argv[i] == '--report-path' || process.argv[i] == '-p') {
@@ -56,22 +58,24 @@ module.exports = function(runner, options) {
 
     runner.on('start', function() {
         if (config.mode != HTML_OUT) {
+            sendToBotStartedTestHead('TEST START', options.botApiKey, options.botChatId);
             console.log('Mocha HTML Table Reporter v2.0.1\nNOTE: Tests sequence must complete to generate html report');
             console.log("Run Mode: " + config.mode + "\n");
         }
     });
 
-    var onEnd = function () {
+    var onEnd = async function () {
         var value = fs.readFileSync(path.join(__dirname, 'header.html'), "utf8"); // get header file
         var doc = '<html><head>' + value + '</head><body>'; // start doc
+        var docConsole ='';
         var width = 695;
         var totalTests = status.pass + status.fail + status.pending;
         var passWidth = ((status.pass / totalTests) * width).toFixed(0);
         var failWidth = ((status.fail / totalTests) * width).toFixed(0);
         var pendWidth = ((status.pending / totalTests) * width).toFixed(0);
-        var passPercent = Math.floor((status.pass / totalTests) * 100);
-        var failPercent = Math.floor((status.fail / totalTests) * 100);
-        var pendingPercent = Math.floor((status.pending / totalTests) * 100);
+        passPercent = Math.floor((status.pass / totalTests) * 100);
+        failPercent = Math.floor((status.fail / totalTests) * 100);
+        pendingPercent = Math.floor((status.pending / totalTests) * 100);
         if (passPercent + failPercent + pendingPercent == 99) failPercent++;
 
         var totals = '<div style="height:120px;"><div class="totalsLeft">' +
@@ -89,7 +93,7 @@ module.exports = function(runner, options) {
             '<div class="innerDiv" style="width:' + pendWidth + 'px; background-color: DarkBlue; height:50px; float:left;">' + pendingPercent + '%</div>' +
             '</div></div>';
         doc += percentages;
-        
+
         doc += '<div id="reportTable">' + displayHTML(root) + '</div></body></html>'; // compile tests and finish the doc
 
         if (config.mode == HTML_OUT) console.log(doc);
@@ -102,6 +106,10 @@ module.exports = function(runner, options) {
             }
 
             console.log('\n');
+            console.log(passPercent);
+            console.log(failPercent);
+
+            await sendToBotEndedTest(`\nRun time: ${getTime(status.duration)} \n\n✅Pass persent: ${passPercent} \n\n❌Fail persent: ${failPercent} \n\n💤️Pending persent: ${pendingPercent}`, options.botApiKey, options.botChatId);
 
             if (filePath) {
                 try {
@@ -113,12 +121,19 @@ module.exports = function(runner, options) {
             } else {
                 console.log('No file location and name was given');
             }
+
         }
+
     }
 
     //runner.on('end', onEnd.bind(null));
-    process.on('exit', onEnd.bind(null));
 
+   /* process.on('exit', onEnd.bind(null));*/
+
+    runner.on('end', async function() {
+        await onEnd()
+    })
+    
     runner.on('suite', function(suite) {
         // calculate nesting level
         var depth = 0;
@@ -130,7 +145,10 @@ module.exports = function(runner, options) {
         suite.depth = depth;
         suite.guid = guid();
 
-        if (!suite.root && config.mode != SILENT && config.mode != HTML_OUT) console.log(textIndent(depth) + suite.title);
+        if (!suite.root && config.mode != SILENT && config.mode != HTML_OUT) {
+            console.log(textIndent(depth) + suite.title);
+            sendToBotStartedTest(suite.title, options.botApiKey, options.botChatId);
+        }
     });
 
     runner.on('suite end', function(suite) {
@@ -247,6 +265,7 @@ module.exports = function(runner, options) {
         if (config.mode != SILENT && config.mode != HTML_OUT) {
             var output = colors.green(textIndent(depth) + '√ ' + test.title) + colors.gray(" <" + test.duration + ">");
             console.log(output);
+            sendToBotSuccess(test.title, options.botApiKey, options.botChatId);
         }
 
         if (config.mode == VERBOSE) {
@@ -266,6 +285,7 @@ module.exports = function(runner, options) {
 
                 var output = colors.grey(textIndent(depth+1) + temp);
                 console.log(output);
+
             }
         }
     });
@@ -275,6 +295,7 @@ module.exports = function(runner, options) {
         if (config.mode != SILENT && config.mode != HTML_OUT) {
             var output = colors.cyan(textIndent(depth) + '» ' + test.title) + colors.gray(" <pending>");
             console.log(output);
+            sendToBotPending(test.title, options.botApiKey, options.botChatId);
         }
     });
 
@@ -304,8 +325,11 @@ module.exports = function(runner, options) {
                     }
                     output += colors.gray(((temp != '') ?'\n'+textIndent(depth + 1)+'|Test Logs|\n' + temp : '') + '\n' + textIndent(depth + 1) + '|Error Message|\n' + test.err);
                 }
+                console.log(output);
+                console.log(colors.red(test.err));
+                sendToBotError(test.title, test.err, options.botApiKey, options.botChatId);
             }
-            console.log(output);
+
 
         }
     });
@@ -394,4 +418,42 @@ var getTime = function(x) {
     days = Math.floor(x);
 
     return days + 'd' + ' ' + hours + ':' + minutes + ':' + seconds + ':' + ms;
+}
+
+var sendToBotError = function(title, error, apiKey, chatId) {
+    error = error.toString().replace('AssertionError:', '');
+    let positions = error.indexOf(': expected');
+    if (positions >= 0) {
+        error = error.substr(0, error.indexOf(': expected'));
+    }
+    let message = encodeURIComponent('<pre>❌️ \u0020  \u0020' + title + '</pre>' + ' \n' + error) ; //+ '<code>' + error + '</code>'
+     axios.get(`https://api.telegram.org/bot${apiKey}/sendMessage?chat_id=${chatId}&parse_mode=HTML&text=${message}`, {});
+}
+
+var sendToBotSuccess = function(title, apiKey, chatId) {
+    let message = encodeURIComponent('<pre> ✅️ \u0020  \u0020' + title + '</pre>');
+    axios.get(`https://api.telegram.org/bot${apiKey}/sendMessage?chat_id=${chatId}&parse_mode=HTML&text=${message}`, {});
+}
+
+var sendToBotPending = function(title, apiKey, chatId) {
+    let message = encodeURIComponent('<pre> 💤️ \u0020  \u0020' + title + '</pre>');
+    axios.get(`https://api.telegram.org/bot${apiKey}/sendMessage?chat_id=${chatId}&parse_mode=HTML&text=${message}`, {});
+}
+
+var sendToBotStartedTest = function(text, apiKey, chatId) {
+    let message = encodeURIComponent('<pre> ℹ️ ' + text +  '</pre>');
+    axios.get(`https://api.telegram.org/bot${apiKey}/sendMessage?chat_id=${chatId}&parse_mode=HTML&text=${message}`, {});
+}
+
+var sendToBotStartedTestHead = function(text, apiKey, chatId) {
+    let message = encodeURIComponent('<pre> 🚩 ️🚩 ️🚩️  ' + text +  ' 🚩️ 🚩️ 🚩️ </pre>');
+    axios.get(`https://api.telegram.org/bot${apiKey}/sendMessage?chat_id=${chatId}&parse_mode=HTML&text=${message}`, {});
+}
+
+var sendToBotEndedTest = async function(text, apiKey, chatId) {
+    return new Promise((resolve, reject) => {
+        let message = encodeURIComponent('🏆️ 🏆️ 🏆️  Test ended: 🏆️ 🏆️ 🏆️ <pre>' + text +  '</pre>');
+        axios.get(`https://api.telegram.org/bot${apiKey}/sendMessage?chat_id=${chatId}&parse_mode=HTML&text=${message}`, {})
+            .then(responce => resolve())
+    })
 }
