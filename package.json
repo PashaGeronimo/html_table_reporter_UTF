@@ -18,7 +18,7 @@
     "mocha": "1.6.x"
   },
   "dependencies": {
-    "chalk": "latest",
+    "chalk": "4.1.2",
      "axios": "latest"
   },
   "engines": {
